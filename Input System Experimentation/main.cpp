@@ -9,43 +9,80 @@
 // RIN https://msdn.microsoft.com/en-us/library/windows/desktop/ms645543(v=vs.85).aspx
 // XIN https://msdn.microsoft.com/en-us/library/windows/desktop/ee417001(v=vs.85).aspx
 
-LRESULT inputHandler(HWND hwnd, WPARAM wparam, LPARAM lparam, Font& font, Graphics& gfx) {
-  if(GET_RAWINPUT_CODE_WPARAM(wparam)) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
+class Input {
+public:
+  Input(Window& win) : state({}) {
+    RAWINPUTDEVICE mouse = { 1, 2, 0, win.getHandle() };
+    RegisterRawInputDevices(&mouse, 1, sizeof(RAWINPUTDEVICE));
 
-  RAWINPUTHEADER header;
-  UINT size = sizeof(RAWINPUTHEADER);
-  GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_HEADER, &header, &size, size);
-  if(header.dwType != RIM_TYPEMOUSE) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
+    win.addProcFunc(WM_INPUT, [this](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return procFn(hwnd, wparam, lparam); });
+  }
 
-  RAWINPUT rin;
-  size = sizeof(rin);
-  GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
-  RAWMOUSE mouse = rin.data.mouse;
-  
-  std::wstringstream ss;
-  ss << "Flags: " << mouse.usFlags << "\nButton Flags: " << mouse.usButtonFlags << "\n\nX: " << mouse.lLastX << "\nY: " << mouse.lLastY << "\nWheel: " << mouse.usButtonData;
-  gfx.clear();
-  font.drawText(ss.str(), 12, 5, 5, ColorF::CYAN);
+  struct MouseState {
+    bool buttons[5];
+    int x, y;
+    int scroll;
 
-  return 0;
-}
+    operator std::wstring() const {
+      std::wstringstream ss;
+
+      ss << "Buttons: ";
+      for(auto b : buttons) { ss << b ? 1 : 0; }
+      ss << "\nX: " << x;
+      ss << "\nY: " << y;
+      ss << "\nScroll: " << scroll;
+
+      return ss.str();
+    }
+  } state;
+
+private:
+  LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
+    if(GET_RAWINPUT_CODE_WPARAM(wparam) != 0) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
+
+    RAWINPUT rin;
+    UINT size = sizeof(rin);
+    GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
+
+    if(rin.header.dwType == RIM_TYPEMOUSE) {
+      updateMouse(rin.data.mouse);
+      return 0;
+    }
+
+    return DefWindowProc(hwnd, WM_INPUT, wparam, lparam);
+  }
+
+  void updateMouse(const RAWMOUSE& data) {
+    if(data.usButtonFlags & 0b0000000001) { state.buttons[0] = true;  }
+    if(data.usButtonFlags & 0b0000000010) { state.buttons[0] = false; }
+    if(data.usButtonFlags & 0b0000000100) { state.buttons[1] = true;  }
+    if(data.usButtonFlags & 0b0000001000) { state.buttons[1] = false; }
+    if(data.usButtonFlags & 0b0000010000) { state.buttons[2] = true;  }
+    if(data.usButtonFlags & 0b0000100000) { state.buttons[2] = false; }
+    if(data.usButtonFlags & 0b0001000000) { state.buttons[3] = true;  }
+    if(data.usButtonFlags & 0b0010000000) { state.buttons[3] = false; }
+    if(data.usButtonFlags & 0b0100000000) { state.buttons[4] = true;  }
+    if(data.usButtonFlags & 0b1000000000) { state.buttons[4] = false; }
+
+    state.x += data.lLastX;
+    state.y += data.lLastY;
+
+    if(data.usButtonData == 120) { state.scroll--; }
+    else if(data.usButtonData == 65416) { state.scroll++; }
+  }
+
+};
 
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Window win("Input System", { 640, 480 });
   Graphics gfx(win);
   GfxFactory factory = gfx.createFactory();
   Font font = factory.createFont(L"Arial");
+  Input input(win);
 
-  RAWINPUTDEVICE mouse;
-  mouse.usUsagePage = 0x01;
-  mouse.usUsage = 0x02;
-  mouse.dwFlags = 0;
-  mouse.hwndTarget = win.getHandle();
-  RegisterRawInputDevices(&mouse, 1, sizeof(RAWINPUTDEVICE));
-
-  win.addProcFunc(WM_INPUT, [&gfx, &font](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return inputHandler(hwnd, wparam, lparam, font, gfx); });
-  while(true) {
-    if(!win.update()) { break; }
+  while(win.update()) {
+    gfx.clear();
+    font.drawText(input.state, 12, 5, 5, ColorF::CYAN);
     gfx.present();
   }
 
