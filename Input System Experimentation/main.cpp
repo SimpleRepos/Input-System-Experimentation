@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <unordered_map>
 #include "cl_Graphics.h"
 #include "cl_GfxFactory.h"
 #include "cl_Font.h"
@@ -11,6 +12,49 @@
 
 class Input {
 public:
+  struct VKey {
+    unsigned int keyDownTimeStamp;
+    bool trigger, press, release;
+  };
+
+  enum Device {
+    MOUSE,
+    KEYBOARD,
+    XIN
+  };
+
+  enum Axis {
+    MOUSE_X,
+    MOUSE_Y,
+    MOUSE_WHEEL,
+    PAD_LX,
+    PAD_LY,
+    PAD_RX,
+    PAD_RY
+  };
+
+  struct KeyBindRecord {
+    Device dev;
+    int keyCode;
+  };
+
+  void addKey();
+  void removeKey();
+  void bindKey();
+  void unbindKey();
+  void resetKeyBinds();
+
+  void addAxis();
+  void removeAxis();
+  void bindAxis();
+  void unbindAxis();
+  void resetAxisbinds();
+
+  std::unordered_map<std::string, VKey> keys;
+  std::unordered_map<std::string, KeyBindRecord> keyBinds;
+  std::unordered_map<std::string, int> axes;
+  std::unordered_map<std::string, Axis> axisBinds;
+
   Input(Window& win) : state({}) {
     RAWINPUTDEVICE mouse = { 1, 2, 0, win.getHandle() };
     RegisterRawInputDevices(&mouse, 1, sizeof(RAWINPUTDEVICE));
