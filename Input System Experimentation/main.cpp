@@ -1,121 +1,9 @@
-#include "cl_Window.h"
 #include <vector>
-#include <string>
-#include <sstream>
-#include <unordered_map>
 #include "cl_Graphics.h"
 #include "cl_GfxFactory.h"
 #include "cl_Font.h"
+#include "cl_Input.h"
 
-// RIN https://msdn.microsoft.com/en-us/library/windows/desktop/ms645543(v=vs.85).aspx
-// XIN https://msdn.microsoft.com/en-us/library/windows/desktop/ee417001(v=vs.85).aspx
-
-class Input {
-public:
-  struct VKey {
-    unsigned int keyDownTimeStamp;
-    bool trigger, press, release;
-  };
-
-  enum Device {
-    MOUSE,
-    KEYBOARD,
-    XIN
-  };
-
-  enum Axis {
-    MOUSE_X,
-    MOUSE_Y,
-    MOUSE_WHEEL,
-    PAD_LX,
-    PAD_LY,
-    PAD_RX,
-    PAD_RY
-  };
-
-  struct KeyBindRecord {
-    Device dev;
-    int keyCode;
-  };
-
-  void addKey();
-  void removeKey();
-  void bindKey();
-  void unbindKey();
-  void resetKeyBinds();
-
-  void addAxis();
-  void removeAxis();
-  void bindAxis();
-  void unbindAxis();
-  void resetAxisbinds();
-
-  std::unordered_map<std::string, VKey> keys;
-  std::unordered_map<std::string, KeyBindRecord> keyBinds;
-  std::unordered_map<std::string, int> axes;
-  std::unordered_map<std::string, Axis> axisBinds;
-
-  Input(Window& win) : state({}) {
-    RAWINPUTDEVICE mouse = { 1, 2, 0, win.getHandle() };
-    RegisterRawInputDevices(&mouse, 1, sizeof(RAWINPUTDEVICE));
-
-    win.addProcFunc(WM_INPUT, [this](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return procFn(hwnd, wparam, lparam); });
-  }
-
-  struct MouseState {
-    bool buttons[5];
-    int x, y;
-    int scroll;
-
-    operator std::wstring() const {
-      std::wstringstream ss;
-
-      ss << "Buttons: ";
-      for(auto b : buttons) { ss << b ? 1 : 0; }
-      ss << "\nX: " << x;
-      ss << "\nY: " << y;
-      ss << "\nScroll: " << scroll;
-
-      return ss.str();
-    }
-  } state;
-
-private:
-  LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
-    if(GET_RAWINPUT_CODE_WPARAM(wparam) != 0) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
-
-    RAWINPUT rin;
-    UINT size = sizeof(rin);
-    GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
-
-    if(rin.header.dwType == RIM_TYPEMOUSE) {
-      updateMouse(rin.data.mouse);
-      return 0;
-    }
-
-    return DefWindowProc(hwnd, WM_INPUT, wparam, lparam);
-  }
-
-  void updateMouse(const RAWMOUSE& data) {
-    if(data.usButtonFlags & 0b0000000001) { state.buttons[0] = true;  }
-    if(data.usButtonFlags & 0b0000000010) { state.buttons[0] = false; }
-    if(data.usButtonFlags & 0b0000000100) { state.buttons[1] = true;  }
-    if(data.usButtonFlags & 0b0000001000) { state.buttons[1] = false; }
-    if(data.usButtonFlags & 0b0000010000) { state.buttons[2] = true;  }
-    if(data.usButtonFlags & 0b0000100000) { state.buttons[2] = false; }
-    if(data.usButtonFlags & 0b0001000000) { state.buttons[3] = true;  }
-    if(data.usButtonFlags & 0b0010000000) { state.buttons[3] = false; }
-    if(data.usButtonFlags & 0b0100000000) { state.buttons[4] = true;  }
-    if(data.usButtonFlags & 0b1000000000) { state.buttons[4] = false; }
-
-    state.x += data.lLastX;
-    state.y += data.lLastY;
-
-    if(data.usButtonData == 120) { state.scroll--; }
-    else if(data.usButtonData == 65416) { state.scroll++; }
-  }
-
-};
 
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Window win("Input System", { 640, 480 });
@@ -124,9 +12,13 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Font font = factory.createFont(L"Arial");
   Input input(win);
 
+  input.addKey("derp");
+  input.bindKey("derp", Input::KeyBindRecord(Input::MOUSE, 1));
+
   while(win.update()) {
     gfx.clear();
-    font.drawText(input.state, 12, 5, 5, ColorF::CYAN);
+    bool pressed = input.press("derp");
+    font.drawText(pressed ? L"yes" : L"no", 20, 5, 5, ColorF::CYAN);
     gfx.present();
   }
 

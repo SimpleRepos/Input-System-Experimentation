@@ -13,47 +13,59 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\Old">
+      <UniqueIdentifier>{8ef34e85-9bbb-4b8d-a2eb-94cb23501f8b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Old">
+      <UniqueIdentifier>{facf3b3c-4e28-407d-a58b-c16bba585292}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="cl_Window.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="cl_Font.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="st_ColorF.cpp">
+      <Filter>Source Files\Old</Filter>
     </ClCompile>
     <ClCompile Include="cl_GfxFactory.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Old</Filter>
     </ClCompile>
     <ClCompile Include="cl_Graphics.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Old</Filter>
     </ClCompile>
-    <ClCompile Include="st_ColorF.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="cl_Window.cpp">
+      <Filter>Source Files\Old</Filter>
     </ClCompile>
     <ClCompile Include="ns_Utility.cpp">
+      <Filter>Source Files\Old</Filter>
+    </ClCompile>
+    <ClCompile Include="cl_Font.cpp">
+      <Filter>Source Files\Old</Filter>
+    </ClCompile>
+    <ClCompile Include="cl_Input.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cl_Window.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="cl_Font.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Old</Filter>
     </ClInclude>
     <ClInclude Include="cl_GfxFactory.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Old</Filter>
     </ClInclude>
     <ClInclude Include="cl_Graphics.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Old</Filter>
     </ClInclude>
-    <ClInclude Include="st_ColorF.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="cl_Window.h">
+      <Filter>Header Files\Old</Filter>
     </ClInclude>
     <ClInclude Include="ns_Utility.h">
+      <Filter>Header Files\Old</Filter>
+    </ClInclude>
+    <ClInclude Include="st_ColorF.h">
+      <Filter>Header Files\Old</Filter>
+    </ClInclude>
+    <ClInclude Include="cl_Input.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

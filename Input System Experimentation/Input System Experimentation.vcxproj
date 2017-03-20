@@ -142,6 +142,7 @@
     <ClCompile Include="cl_Font.cpp" />
     <ClCompile Include="cl_GfxFactory.cpp" />
     <ClCompile Include="cl_Graphics.cpp" />
+    <ClCompile Include="cl_Input.cpp" />
     <ClCompile Include="cl_Window.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ns_Utility.cpp" />
@@ -151,6 +152,7 @@
     <ClInclude Include="cl_Font.h" />
     <ClInclude Include="cl_GfxFactory.h" />
     <ClInclude Include="cl_Graphics.h" />
+    <ClInclude Include="cl_Input.h" />
     <ClInclude Include="cl_Window.h" />
     <ClInclude Include="ns_Utility.h" />
     <ClInclude Include="st_ColorF.h" />
