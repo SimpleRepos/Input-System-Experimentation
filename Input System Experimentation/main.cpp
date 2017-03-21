@@ -17,6 +17,16 @@ std::wstring to_s(const Input::MouseState& mouse) {
   return ss.str();
 }
 
+std::wstring to_s(const Input::KeyboardState& kb) {
+  std::wstringstream ss;
+
+  for(char c = 'A'; c <= 'Z'; c++) {
+    if(kb.keys[c].held) { ss << c; }
+  }
+
+  return ss.str();
+}
+
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Window win("Input System", { 640, 480 });
   Graphics gfx(win);
@@ -26,11 +36,12 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   while(win.update()) {
 
-    Sleep(200);
+    Sleep(100);
 
     gfx.clear();
     input.update();
     font.drawText(to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
+    font.drawText(to_s(input.keyboard()), 20, 200, 5, ColorF::GREEN);
     gfx.present();
   }
 

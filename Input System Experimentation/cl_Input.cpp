@@ -1,7 +1,7 @@
 #include "cl_Input.h"
 
 namespace {
-  unsigned int millisecondsSinceEpoch() {
+  uint64_t millisecondsSinceEpoch() {
     auto now = std::chrono::high_resolution_clock::now();
     return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
   }
@@ -20,7 +20,7 @@ Input::Input(Window& win) {
 
 void Input::update() {
   mouseState.update();
-  //keyboardState.update();
+  kbState.update();
 }
 
 void Input::MouseState::update() {
@@ -40,9 +40,8 @@ void Input::MouseState::update() {
 
     dX += event.lLastX;
     dY += event.lLastY;
-    short dWheelRaw = static_cast<short>(event.usButtonData);
-    if(dWheelRaw < 0) { dWheel--; }
-    else if(dWheelRaw > 0) { dWheel++; }
+    dWheel += static_cast<short>(event.usButtonData);
+
     for(int i = 0; i < MouseState::BUTTON_CT; i++) {
       USHORT buttonState = event.usButtonFlags >> (i * 2);
       if(buttonState & 0b01) {
@@ -102,7 +101,7 @@ void Input::KeyboardState::Key::updateRepeat() {
   if(!held) { return; }
 
   //false prior to delay elapsed
-  int elapsedMS = millisecondsSinceEpoch() - triggerTimeMS;
+  int elapsedMS = static_cast<int>(millisecondsSinceEpoch() - triggerTimeMS);
   int postDelayMS = elapsedMS - REPEAT_DELAY_MS;
   if(postDelayMS < 0) { return; }
 

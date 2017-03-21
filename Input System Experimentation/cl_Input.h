@@ -20,7 +20,8 @@ public:
   const MouseState& mouse() const { return mouseState; }
   const KeyboardState& keyboard() const { return kbState; }
 
-private:
+  //~~@ redo these to use non-member stuff and aux data so only the user-facing stuff is public
+
   struct MouseState {
     static const size_t BUTTON_CT = 5;
     struct Button { bool triggered, held, released; };
@@ -36,13 +37,10 @@ private:
 
   };
 
-
   struct KeyboardState {
     static const unsigned int REPEAT_DELAY_MS = 500;
     static const unsigned int REPEAT_FREQ_MS  = 100;
     static const size_t KEY_CT = 0xFF;
-
-    //~~@ redo these to use non-member stuff and aux data so only the user-facing stuff is public
 
     struct Key {
       bool triggered, held, released, repeating;
@@ -51,7 +49,7 @@ private:
       void release();
 
     private:
-      unsigned int triggerTimeMS;
+      uint64_t triggerTimeMS;
       unsigned int repeatPrev;
       void updateRepeat();
 
@@ -67,6 +65,7 @@ private:
 
   };
 
+private:
   MouseState mouseState;
   KeyboardState kbState;
 
