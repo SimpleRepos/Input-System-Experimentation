@@ -1,6 +1,16 @@
 #include "cl_Input.h"
+#include <Xinput.h>
+
+#pragma comment(lib, "Xinput9_1_0.lib")
 
 Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
+  repeatDelayMS = DEFAULT_REPEAT_DELAY_MS;
+  repeatPeriodMS = DEFAULT_REPEAT_PERIOD_MS;
+
+  devState.buttons.resize(buttonCt);
+  repeatData.resize(buttonCt);
+  devState.axes.resize(axisCt);
+
   switch(type) {
   case Type::MOUSE:
     processEvent = [this](const RAWINPUT& rin, uint64_t frameTime) { mouseHandler(rin, frameTime); };
@@ -10,29 +20,42 @@ Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
     break;
   case Type::XINPUT:
     processEvent = [](const RAWINPUT&, uint64_t) {};
+    xinputPrev = devState.buttons;
     break;
   }
-
-  repeatDelayMS = DEFAULT_REPEAT_DELAY_MS;
-  repeatPeriodMS = DEFAULT_REPEAT_PERIOD_MS;
-
-  devState.buttons.resize(buttonCt);
-  repeatData.resize(buttonCt);
-  devState.axes.resize(axisCt);
 }
 
 void Input::Device::update(uint64_t frameTime) {
-  if(type == XINPUT) {
-    //~~_
-  }
-
   for(auto& button : devState.buttons) { resetButton(button); }
   for(auto& axis : devState.axes) { axis = 0; }
 
-  while(!eventQueue.empty()) {
-    auto event = eventQueue.front();
-    eventQueue.pop();
-    processEvent(event, frameTime);
+  if(type == Type::XINPUT) {
+    XINPUT_STATE xstate;
+    XInputGetState(0, &xstate);
+    auto& pad = xstate.Gamepad;
+
+    for(size_t i = 0; i < devState.buttons.size(); i++) {
+      auto& btn = devState.buttons[i];
+      btn.held = (pad.wButtons >> i) & 1;
+      if(btn.held && !xinputPrev[i].held) { triggerButton(btn, repeatData[i], frameTime); }
+      if(!btn.held && xinputPrev[i].held) { releaseButton(btn); }
+    }
+
+    devState.axes[LEFT_X] = pad.sThumbLX;
+    devState.axes[LEFT_Y] = pad.sThumbLY;
+    devState.axes[RIGHT_X] = pad.sThumbRX;
+    devState.axes[RIGHT_Y] = pad.sThumbRY;
+    devState.axes[LTRIGGER] = pad.bLeftTrigger;
+    devState.axes[RTRIGGER] = pad.bRightTrigger;
+
+    xinputPrev = devState.buttons;
+  }
+  else {
+    while(!eventQueue.empty()) {
+      auto event = eventQueue.front();
+      eventQueue.pop();
+      processEvent(event, frameTime);
+    }
   }
 
   for(size_t i = 0; i < devState.buttons.size(); i++) {
@@ -99,7 +122,11 @@ void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
 
 //////////////////////////////////////////
 
-Input::Input(Window& win) : kbDev(0xFF, 0, Device::Type::KEYBOARD), mouseDev(5, 3, Device::Type::MOUSE) {
+Input::Input(Window& win) :
+  kbDev(0xFF, 0, Device::Type::KEYBOARD),
+  mouseDev(5, 3, Device::Type::MOUSE),
+  xinputDev(14, 6, Device::Type::XINPUT)
+{
   constexpr size_t NUM_DEVICES = 2;
   RAWINPUTDEVICE devices[NUM_DEVICES] = {
     RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
@@ -116,6 +143,7 @@ void Input::update() {
   uint64_t frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
   mouseDev.update(frameTime);
   kbDev.update(frameTime);
+  xinputDev.update(frameTime);
 }
 
 LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {

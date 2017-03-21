@@ -27,6 +27,17 @@ std::wstring kb_to_s(const Input::Device::State& kb) {
   return ss.str();
 }
 
+std::wstring xin_to_s(const Input::Device::State& pad) {
+  std::wstringstream ss;
+
+  if(pad.buttons[0].repeating) { ss << "up\n"; }
+  if(pad.buttons[1].repeating) { ss << "dn\n"; }
+  if(pad.buttons[2].repeating) { ss << "lt\n"; }
+  if(pad.buttons[3].repeating) { ss << "rt\n"; }
+
+  return ss.str();
+}
+
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Window win("Input System", { 640, 480 });
   Graphics gfx(win);
@@ -42,6 +53,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     input.update();
     font.drawText(m_to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
     font.drawText(kb_to_s(input.keyboard()), 20, 200, 5, ColorF::GREEN);
+    font.drawText(xin_to_s(input.gamepad()), 20, 200, 200, ColorF::RED);
     gfx.present();
   }
 

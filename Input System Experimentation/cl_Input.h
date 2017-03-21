@@ -5,8 +5,7 @@
 #include <queue>
 #include "cl_Window.h"
 
-//XIN https://msdn.microsoft.com/en-us/library/windows/desktop/ee417001(v=vs.85).aspx
-//~~_ xinput with dead zones
+//~~_ dead zones
 
 class Input {
 public:
@@ -50,6 +49,7 @@ public:
 
     State devState;
     std::vector<ButtonRepeatData> repeatData;
+    std::vector<Button> xinputPrev;
     std::queue<RAWINPUT> eventQueue;
 
     void update(uint64_t frameTime);
@@ -66,11 +66,16 @@ public:
 
   enum MouseAxes { DELTA_X, DELTA_Y, DELTA_WHEEL };
   const Device::State& mouse() const { return mouseDev.state(); }
+
   const Device::State& keyboard() const { return kbDev.state(); }
+
+  enum GamepadAxes { LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LTRIGGER, RTRIGGER };
+  const Device::State& gamepad() const { return xinputDev.state(); }
 
 private:
   Device kbDev;
   Device mouseDev;
+  Device xinputDev;
 
   LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam);
 
