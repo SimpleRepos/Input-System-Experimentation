@@ -9,9 +9,9 @@
 std::wstring to_s(const Input::MouseState& mouse) {
   std::wstringstream ss;
 
-  ss << "Deltas: " << mouse.dX << ", " << mouse.dY << ", " << mouse.dWheel << "\n";
+  ss << "Deltas: " << mouse.axes[Input::MouseState::DELTA_X] << ", " << mouse.axes[Input::MouseState::DELTA_Y] << ", " << mouse.axes[Input::MouseState::DELTA_WHEEL] << "\n";
   for(const auto& button : mouse.buttons) {
-    ss << button.triggered << button.held << button.released << "\n";
+    ss << button.triggered << button.held << button.released << button.repeating << "\n";
   }
 
   return ss.str();
@@ -21,7 +21,7 @@ std::wstring to_s(const Input::KeyboardState& kb) {
   std::wstringstream ss;
 
   for(char c = 'A'; c <= 'Z'; c++) {
-    if(kb.keys[c].held) { ss << c; }
+    if(kb.buttons[c].held) { ss << c; }
   }
 
   return ss.str();
@@ -36,7 +36,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   while(win.update()) {
 
-    Sleep(100);
+    Sleep(50);
 
     gfx.clear();
     input.update();

@@ -5,70 +5,69 @@
 #include <queue>
 #include "cl_Window.h"
 
-//RIN https://msdn.microsoft.com/en-us/library/windows/desktop/ms645543(v=vs.85).aspx
 //XIN https://msdn.microsoft.com/en-us/library/windows/desktop/ee417001(v=vs.85).aspx
 //~~_ xinput with dead zones
 
 class Input {
 public:
-  Input(Window& win);
-  void update();
+  struct Button {
+    bool held      = false; //is the button currently down
+    bool triggered = false; //is this the first frame of it being pressed
+    bool released  = false; //was it released during this frame
+    bool repeating = false; //~~# true on trigger frame, then after repeatDelayMS every repeatPeriodMS
+  };
 
-  struct MouseState;
-  struct KeyboardState;
-
-  const MouseState& mouse() const { return mouseState; }
-  const KeyboardState& keyboard() const { return kbState; }
-
-  //~~@ redo these to use non-member stuff and aux data so only the user-facing stuff is public
+  //These values can be set by the user to effect the key-repeat behavior
+  unsigned int repeatDelayMS;
+  unsigned int repeatPeriodMS;
+  static const unsigned int DEFAULT_REPEAT_DELAY_MS  = 500;
+  static const unsigned int DEFAULT_REPEAT_PERIOD_MS = 100;
 
   struct MouseState {
     static const size_t BUTTON_CT = 5;
-    struct Button { bool triggered, held, released; };
-    Button buttons[BUTTON_CT] = {};
-
-    int dX, dY, dWheel;
-
-    void update();
-    void addEvent(const RAWMOUSE& event);
-
-  private:
-    std::queue<RAWMOUSE> events;
-
+    std::array<Button, BUTTON_CT> buttons;
+    static const size_t AXIS_CT = 3;
+    enum AXIS { DELTA_X, DELTA_Y, DELTA_WHEEL };
+    std::array<int, AXIS_CT> axes;
   };
 
   struct KeyboardState {
-    static const unsigned int REPEAT_DELAY_MS = 500;
-    static const unsigned int REPEAT_FREQ_MS  = 100;
-    static const size_t KEY_CT = 0xFF;
-
-    struct Key {
-      bool triggered, held, released, repeating;
-
-      void trigger();
-      void release();
-
-    private:
-      uint64_t triggerTimeMS;
-      unsigned int repeatPrev;
-      void updateRepeat();
-
-    };
-
-    Key keys[KEY_CT] = {};
-
-    void update();
-    void addEvent(const RAWKEYBOARD& event);
-
-  private:
-    std::queue<RAWKEYBOARD> events;
-
+    static const size_t BUTTON_CT = 255;
+    std::array<Button, BUTTON_CT> buttons;
+    //static const size_t AXIS_CT = 0;
+    //std::array<int, AXIS_CT> axes;
   };
 
+  Input(Window& win);
+  void update();
+  const MouseState& mouse() const { return mouseState; }
+  const KeyboardState& keyboard() const { return kbState; }
+
 private:
+  struct ButtonRepeatData {
+    uint64_t triggerTimeMS;
+    unsigned int repeatPrev;
+  };
+
   MouseState mouseState;
+  std::array<ButtonRepeatData, MouseState::BUTTON_CT> mouseAux;
+  std::queue<RAWMOUSE> mouseEvents;
+
   KeyboardState kbState;
+  std::array<ButtonRepeatData, KeyboardState::BUTTON_CT> kbAux;
+  std::queue<RAWKEYBOARD> kbEvents;
 
   LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam);
+
+  void triggerButton(Button& btn, ButtonRepeatData& aux, uint64_t frameTime);
+  void releaseButton(Button& btn);
+  void resetButton(Button& btn);
+  void updateRepeat(Button& btn, ButtonRepeatData& aux, uint64_t frameTime);
+
+  void updateMouseState(uint64_t frameTime);
+  void processMouseEvent(const RAWMOUSE& event, uint64_t frameTime);
+
+  void updateKeyboardState(uint64_t frameTime);
+  void processKeyboardEvent(const RAWKEYBOARD& event, uint64_t frameTime);
 
 };

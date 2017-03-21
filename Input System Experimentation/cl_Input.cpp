@@ -1,13 +1,9 @@
 #include "cl_Input.h"
 
-namespace {
-  uint64_t millisecondsSinceEpoch() {
-    auto now = std::chrono::high_resolution_clock::now();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-  }
-}
-
 Input::Input(Window& win) {
+  repeatDelayMS = DEFAULT_REPEAT_DELAY_MS;
+  repeatPeriodMS = DEFAULT_REPEAT_PERIOD_MS;
+
   std::array<RAWINPUTDEVICE, 2> devices = {
     RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
     RAWINPUTDEVICE{ 1, 6, 0, win.getHandle() }  //kb
@@ -19,98 +15,90 @@ Input::Input(Window& win) {
 }
 
 void Input::update() {
-  mouseState.update();
-  kbState.update();
+  auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
+  uint64_t frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+  updateMouseState(frameTime);
+  updateKeyboardState(frameTime);
 }
 
-void Input::MouseState::update() {
-  //clean the mouse state
-  dX = 0;
-  dY = 0;
-  dWheel = 0;
-  for(auto& button : buttons) {
-    button.triggered = false;
-    button.released  = false;
-  }
-
-  //process the event queue
-  while(!events.empty()) {
-    RAWMOUSE event = events.front();
-    events.pop();
-
-    dX += event.lLastX;
-    dY += event.lLastY;
-    dWheel += static_cast<short>(event.usButtonData);
-
-    for(int i = 0; i < MouseState::BUTTON_CT; i++) {
-      USHORT buttonState = event.usButtonFlags >> (i * 2);
-      if(buttonState & 0b01) {
-        buttons[i].triggered = true;
-        buttons[i].held      = true;
-      }
-      if(buttonState & 0b10) {
-        buttons[i].released = true;
-        buttons[i].held     = false;
-      }
-    }
-  }
+void Input::triggerButton(Button& btn, ButtonRepeatData& aux, uint64_t frameTime) {
+  btn.triggered = true;
+  btn.held      = true;
+  aux.triggerTimeMS = frameTime;
+  aux.repeatPrev = 0;
 }
 
-void Input::MouseState::addEvent(const RAWMOUSE& event) {
-  events.push(event);
+void Input::releaseButton(Button& btn) {
+  btn.released = true;
+  btn.held     = false;
 }
 
-void Input::KeyboardState::update() {
-  for(auto& key : keys) {
-    key.triggered = false;
-    key.released  = false;
+void Input::updateMouseState(uint64_t frameTime) {
+  for(auto& button : mouseState.buttons) { resetButton(button); }
+  for(auto& axis : mouseState.axes) { axis = 0; }
+
+  while(!mouseEvents.empty()) {
+    RAWMOUSE event = mouseEvents.front();
+    mouseEvents.pop();
+    processMouseEvent(event, frameTime);
   }
 
-  while(!events.empty()) {
-    RAWKEYBOARD event = events.front();
-    events.pop();
+  for(int i = 0; i < MouseState::BUTTON_CT; i++) { updateRepeat(mouseState.buttons[i], mouseAux[i], frameTime); }
+}
 
-    auto& key = keys[event.VKey];
-    if(event.Message == WM_KEYDOWN)  { key.trigger(); }
-    if(event.Message == WM_KEYUP)    { key.release(); }
+void Input::processMouseEvent(const RAWMOUSE& event, uint64_t frameTime) {
+  mouseState.axes[MouseState::DELTA_X] += event.lLastX;
+  mouseState.axes[MouseState::DELTA_Y] += event.lLastY;
+  mouseState.axes[MouseState::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
+
+  for(int i = 0; i < MouseState::BUTTON_CT; i++) {
+    USHORT buttonState = event.usButtonFlags >> (i * 2);
+    if(buttonState & 0b01) { triggerButton(mouseState.buttons[i], mouseAux[i], frameTime); }
+    if(buttonState & 0b10) { releaseButton(mouseState.buttons[i]); }
   }
 }
 
-void Input::KeyboardState::addEvent(const RAWKEYBOARD& event) {
-  events.push(event);
+void Input::updateKeyboardState(uint64_t frameTime) {
+  for(auto& key : kbState.buttons) { resetButton(key); }
+
+  while(!kbEvents.empty()) {
+    RAWKEYBOARD event = kbEvents.front();
+    kbEvents.pop();
+    processKeyboardEvent(event, frameTime);
+  }
+
+  for(int i = 0; i < KeyboardState::BUTTON_CT; i++) { updateRepeat(kbState.buttons[i], kbAux[i], frameTime); }
 }
 
-void Input::KeyboardState::Key::trigger() {
-  triggered = true;
-  held = true;
-  triggerTimeMS = millisecondsSinceEpoch();
-  repeatPrev = 0;
+void Input::processKeyboardEvent(const RAWKEYBOARD& event, uint64_t frameTime) {
+  if(event.Message == WM_KEYDOWN) { triggerButton(kbState.buttons[event.VKey], kbAux[event.VKey], frameTime); }
+  if(event.Message == WM_KEYUP)   { releaseButton(kbState.buttons[event.VKey]); }
 }
 
-void Input::KeyboardState::Key::release() {
-  released = true;
-  held = false;
+void Input::resetButton(Button& btn) {
+  btn.triggered = false;
+  btn.released  = false;
 }
 
-void Input::KeyboardState::Key::updateRepeat() {
+void Input::updateRepeat(Button& btn, ButtonRepeatData& aux, uint64_t frameTime) {
   //true on trigger frame
-  repeating = triggered;
-  if(repeating) { return; }
+  btn.repeating = btn.triggered;
+  if(btn.repeating) { return; }
 
   //if the key isn't down then it's not repeating (unless it triggered)
-  if(!held) { return; }
+  if(!btn.held) { return; }
 
   //false prior to delay elapsed
-  int elapsedMS = static_cast<int>(millisecondsSinceEpoch() - triggerTimeMS);
-  int postDelayMS = elapsedMS - REPEAT_DELAY_MS;
+  int elapsedMS = static_cast<int>(frameTime - aux.triggerTimeMS);
+  int postDelayMS = elapsedMS - repeatDelayMS;
   if(postDelayMS < 0) { return; }
 
   //number of repeats that should have happened by now
-  unsigned int repeatTarget = postDelayMS / REPEAT_FREQ_MS;
+  unsigned int repeatTarget = postDelayMS / repeatPeriodMS;
   //if it's increased since the last poll then repeat
-  repeating = repeatPrev < repeatTarget;
+  btn.repeating = aux.repeatPrev < repeatTarget;
 
-  repeatPrev = repeatTarget;
+  aux.repeatPrev = repeatTarget;
 }
 
 LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
@@ -123,8 +111,8 @@ LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
   GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
 
   switch(rin.header.dwType) {
-  case    RIM_TYPEMOUSE: mouseState.addEvent(rin.data.mouse); break;
-  case RIM_TYPEKEYBOARD: kbState.addEvent(rin.data.keyboard); break;
+  case    RIM_TYPEMOUSE: mouseEvents.push(rin.data.mouse); break;
+  case RIM_TYPEKEYBOARD: kbEvents.push(rin.data.keyboard); break;
   }
 
   return 0;
