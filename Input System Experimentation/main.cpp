@@ -6,10 +6,10 @@
 #include <string>
 
 
-std::wstring to_s(const Input::MouseState& mouse) {
+std::wstring m_to_s(const Input::Device::State& mouse) {
   std::wstringstream ss;
 
-  ss << "Deltas: " << mouse.axes[Input::MouseState::DELTA_X] << ", " << mouse.axes[Input::MouseState::DELTA_Y] << ", " << mouse.axes[Input::MouseState::DELTA_WHEEL] << "\n";
+  ss << "Deltas: " << mouse.axes[Input::MouseAxes::DELTA_X] << ", " << mouse.axes[Input::MouseAxes::DELTA_Y] << ", " << mouse.axes[Input::MouseAxes::DELTA_WHEEL] << "\n";
   for(const auto& button : mouse.buttons) {
     ss << button.triggered << button.held << button.released << button.repeating << "\n";
   }
@@ -17,7 +17,7 @@ std::wstring to_s(const Input::MouseState& mouse) {
   return ss.str();
 }
 
-std::wstring to_s(const Input::KeyboardState& kb) {
+std::wstring kb_to_s(const Input::Device::State& kb) {
   std::wstringstream ss;
 
   for(char c = 'A'; c <= 'Z'; c++) {
@@ -40,8 +40,8 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     gfx.clear();
     input.update();
-    font.drawText(to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
-    font.drawText(to_s(input.keyboard()), 20, 200, 5, ColorF::GREEN);
+    font.drawText(m_to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
+    font.drawText(kb_to_s(input.keyboard()), 20, 200, 5, ColorF::GREEN);
     gfx.present();
   }
 
