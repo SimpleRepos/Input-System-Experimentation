@@ -1,10 +1,13 @@
 #include "cl_Input.h"
-#include "cl_Window.h"
-#include <array>
+
+namespace {
+  unsigned int millisecondsSinceEpoch() {
+    auto now = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+  }
+}
 
 Input::Input(Window& win) {
-  for(int& axis : axes) { axis = 0; }
-
   std::array<RAWINPUTDEVICE, 2> devices = {
     RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
     RAWINPUTDEVICE{ 1, 6, 0, win.getHandle() }  //kb
@@ -15,45 +18,115 @@ Input::Input(Window& win) {
   win.addProcFunc(WM_INPUT, [this](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return procFn(hwnd, wparam, lparam); });
 }
 
+void Input::update() {
+  mouseState.update();
+  //keyboardState.update();
+}
+
+void Input::MouseState::update() {
+  //clean the mouse state
+  dX = 0;
+  dY = 0;
+  dWheel = 0;
+  for(auto& button : buttons) {
+    button.triggered = false;
+    button.released  = false;
+  }
+
+  //process the event queue
+  while(!events.empty()) {
+    RAWMOUSE event = events.front();
+    events.pop();
+
+    dX += event.lLastX;
+    dY += event.lLastY;
+    short dWheelRaw = static_cast<short>(event.usButtonData);
+    if(dWheelRaw < 0) { dWheel--; }
+    else if(dWheelRaw > 0) { dWheel++; }
+    for(int i = 0; i < MouseState::BUTTON_CT; i++) {
+      USHORT buttonState = event.usButtonFlags >> (i * 2);
+      if(buttonState & 0b01) {
+        buttons[i].triggered = true;
+        buttons[i].held      = true;
+      }
+      if(buttonState & 0b10) {
+        buttons[i].released = true;
+        buttons[i].held     = false;
+      }
+    }
+  }
+}
+
+void Input::MouseState::addEvent(const RAWMOUSE& event) {
+  events.push(event);
+}
+
+void Input::KeyboardState::update() {
+  for(auto& key : keys) {
+    key.triggered = false;
+    key.released  = false;
+  }
+
+  while(!events.empty()) {
+    RAWKEYBOARD event = events.front();
+    events.pop();
+
+    auto& key = keys[event.VKey];
+    if(event.Message == WM_KEYDOWN)  { key.trigger(); }
+    if(event.Message == WM_KEYUP)    { key.release(); }
+  }
+}
+
+void Input::KeyboardState::addEvent(const RAWKEYBOARD& event) {
+  events.push(event);
+}
+
+void Input::KeyboardState::Key::trigger() {
+  triggered = true;
+  held = true;
+  triggerTimeMS = millisecondsSinceEpoch();
+  repeatPrev = 0;
+}
+
+void Input::KeyboardState::Key::release() {
+  released = true;
+  held = false;
+}
+
+void Input::KeyboardState::Key::updateRepeat() {
+  //true on trigger frame
+  repeating = triggered;
+  if(repeating) { return; }
+
+  //if the key isn't down then it's not repeating (unless it triggered)
+  if(!held) { return; }
+
+  //false prior to delay elapsed
+  int elapsedMS = millisecondsSinceEpoch() - triggerTimeMS;
+  int postDelayMS = elapsedMS - REPEAT_DELAY_MS;
+  if(postDelayMS < 0) { return; }
+
+  //number of repeats that should have happened by now
+  unsigned int repeatTarget = postDelayMS / REPEAT_FREQ_MS;
+  //if it's increased since the last poll then repeat
+  repeating = repeatPrev < repeatTarget;
+
+  repeatPrev = repeatTarget;
+}
+
 LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
   //delegate to default proc if window is not in foreground
   if(GET_RAWINPUT_CODE_WPARAM(wparam) != 0) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
 
+  //store the event to be handled during the update
   RAWINPUT rin;
-  UINT size = sizeof(rin);
+  UINT size = sizeof(RAWINPUT);
   GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
 
   switch(rin.header.dwType) {
-  case RIM_TYPEMOUSE: updateMouse(rin.data.mouse); return 0;
-  case RIM_TYPEKEYBOARD: updateKeyboard(rin.data.keyboard); return 0;
-  case RIM_TYPEHID: updateXInput(); break;
+  case    RIM_TYPEMOUSE: mouseState.addEvent(rin.data.mouse); break;
+  case RIM_TYPEKEYBOARD: kbState.addEvent(rin.data.keyboard); break;
   }
 
-  return DefWindowProc(hwnd, WM_INPUT, wparam, lparam);
-}
-
-void Input::updateMouse(const RAWMOUSE& data) {
-  axes[MOUSE_X] += data.lLastX;
-  axes[MOUSE_Y] += data.lLastX;
-  //~~! these magic numbers probably mean something weird is happening - research and correct
-       if(data.usButtonData ==   120) { axes[MOUSE_WHEEL]--; }
-  else if(data.usButtonData == 65416) { axes[MOUSE_WHEEL]++; }
-
-  for(short i = 0; i < numMouseButtons; i++) {
-    auto iter = keyBinds.find(KeyBindRecord(MOUSE, i));
-    if(iter == keyBinds.end()) { continue; }
-    VKey& key = keys[iter->second];
-
-    int val = (data.usButtonFlags >> (i * 2)) & 0b11;
-    if(val & 0b01) { //pressed
-      key.trigger = true;
-      key.press = true;
-      //~~_ key.keyDownTimeStamp = now;
-    }
-    if(val & 0b10) { //relesaed
-      key.release = true;
-      key.press = false;
-    }
-  }
-
+  return 0;
 }
