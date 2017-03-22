@@ -5,42 +5,16 @@
 #include <sstream>
 #include <string>
 
-std::wstring xin_to_s(const Input::Device::State& pad) {
+std::wstring to_s(const Input::Device::State& state) {
   std::wstringstream ss;
 
-  if(pad.buttons[Input::Gamepad::DPAD_UP].held) { ss << "UP"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_DOWN].held) { ss << "DOWN"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_LEFT].held) { ss << "LEFT"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_RIGHT].held) { ss << "RIGHT"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::START].held) { ss << "START"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::BACK].held) { ss << "BACK"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::LTHUMB].held) { ss << "LTHUMB"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::RTHUMB].held) { ss << "RTHUMB"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::LSHOULDER].held) { ss << "LSHOULDER"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::RSHOULDER].held) { ss << "RSHOULDER"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::A].held) { ss << "A"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::B].held) { ss << "B"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::X].held) { ss << "X"; }
-  ss << "\n";
-  if(pad.buttons[Input::Gamepad::Y].held) { ss << "Y"; }
-  ss << "\n\n";
-
-  ss << "Left Stick: " << pad.axes[Input::Gamepad::LEFT_X] << ", " << pad.axes[Input::Gamepad::LEFT_Y] << "\n";
-  ss << "Right Stick: " << pad.axes[Input::Gamepad::RIGHT_X] << ", " << pad.axes[Input::Gamepad::RIGHT_Y] << "\n";
-  ss << "Left Trigger: " << pad.axes[Input::Gamepad::LTRIGGER] << "\n";
-  ss << "Right Trigger: " << pad.axes[Input::Gamepad::RTRIGGER] << "\n";
+  ss << "Position Delta: " << state.axes[Input::Mouse::Axes::DELTA_X] << ", " << state.axes[Input::Mouse::Axes::DELTA_Y] << "\n";
+  ss << "Wheel Delta:" << state.axes[Input::Mouse::Axes::DELTA_WHEEL] << "\n";
+  ss << "Left Button: "    << state.buttons[Input::Mouse::Buttons::LEFT].held << "\n";
+  ss << "Right Button: "   << state.buttons[Input::Mouse::Buttons::RIGHT].held << "\n";
+  ss << "Wheel Button: "   << state.buttons[Input::Mouse::Buttons::WHEEL].held << "\n";
+  ss << "Back Button: "    << state.buttons[Input::Mouse::Buttons::BACK].held << "\n";
+  ss << "Forward Button: " << state.buttons[Input::Mouse::Buttons::FORWARD].held << "\n";
 
   return ss.str();
 }
@@ -57,8 +31,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     gfx.clear();
     input.update();
-    font.drawText(L"UP\nDOWN\nLEFT\nRIGHT\nSTART\nBACK\nLTHUMB\nRTHUMB\nLSHOULDER\nRSHOULDER\nA\nB\nX\nY", 20, 5, 5, ColorF::RED);
-    font.drawText(xin_to_s(input.gamepad()), 20, 5, 5, ColorF::CYAN);
+    font.drawText(to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
     gfx.present();
   }
 
