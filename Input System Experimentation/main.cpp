@@ -8,22 +8,26 @@
 std::wstring to_s(const Input::Device::State& state) {
   std::wstringstream ss;
 
-  ss << "Position Delta: " << state.axes[Input::Mouse::Axes::DELTA_X] << ", " << state.axes[Input::Mouse::Axes::DELTA_Y] << "\n";
-  ss << "Wheel Delta:" << state.axes[Input::Mouse::Axes::DELTA_WHEEL] << "\n";
-  ss << "Left Button: "    << state.buttons[Input::Mouse::Buttons::LEFT].held << "\n";
-  ss << "Right Button: "   << state.buttons[Input::Mouse::Buttons::RIGHT].held << "\n";
-  ss << "Wheel Button: "   << state.buttons[Input::Mouse::Buttons::WHEEL].held << "\n";
-  ss << "Back Button: "    << state.buttons[Input::Mouse::Buttons::BACK].held << "\n";
-  ss << "Forward Button: " << state.buttons[Input::Mouse::Buttons::FORWARD].held << "\n";
+  constexpr int columns = 16;
+  const int stride = state.buttons.size() / columns;
+  for(size_t x = 0; x < state.buttons.size(); ) {
+    for(int i = 0; i < columns; i++) {
+      if(++x >= state.buttons.size()) { break; }
+      if(state.buttons[x].held) { ss <<  "O"; }
+      else                      { ss <<  "."; }
+      ss <<  " ";
+    }
+    ss << "\n";
+  }
 
   return ss.str();
 }
 
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-  Window win("Input System", { 640, 480 });
+  Window win("Input System", { 800, 600 });
   Graphics gfx(win);
   GfxFactory factory = gfx.createFactory();
-  Font font = factory.createFont(L"Arial");
+  Font font = factory.createFont(L"Courier New");
   Input input(win);
 
   while(win.update()) {
@@ -31,7 +35,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     gfx.clear();
     input.update();
-    font.drawText(to_s(input.mouse()), 20, 5, 5, ColorF::CYAN);
+    font.drawText(to_s(input.keyboard()), 10, 5, 5, ColorF::CYAN);
     gfx.present();
   }
 
