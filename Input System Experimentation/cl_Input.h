@@ -5,8 +5,6 @@
 #include <queue>
 #include "cl_Window.h"
 
-//~~_ dead zones
-
 class Input {
 public:
   Input(Window& win);
@@ -45,7 +43,7 @@ public:
 
     struct State {
       std::vector<Button> buttons;
-      std::vector<int> axes;
+      std::vector<float> axes;
     };
 
     const State& state() const { return devState; }
@@ -61,10 +59,14 @@ public:
     State devState;
     std::vector<ButtonRepeatData> repeatData;
     std::vector<Button> xinputPrev;
+    std::vector<float> deadZones;
     std::queue<RAWINPUT> eventQueue;
 
     void update(uint64_t frameTime);
+    void updateXinput(uint64_t frameTime);
+    void applyDeadZonedInput(int axis, int input, float axisMaxRange);
     std::function<void(const RAWINPUT&, uint64_t)> processEvent;
+
     void triggerButton(Button& btn, ButtonRepeatData& aux, uint64_t frameTime);
     void releaseButton(Button& btn);
     void resetButton(Button& btn);
@@ -89,16 +91,25 @@ public:
     enum Buttons { 
       DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
       START, BACK, LTHUMB, RTHUMB,
-      LSHOULDER, RSHOULDER, INVALID1, INVALID2, //~~@
+      LSHOULDER, RSHOULDER,
       A, B, X, Y
     };
   };
   const Device::State& gamepad() const { return xinputDev.state(); }
+  float getGamepadDeadZone(int axis);
+  void setGamepadDeadZone(int axis, float zoneRadius);
 
 private:
+  static constexpr size_t KB_BUTTON_CT = 255;
+  static constexpr size_t KB_AXIS_CT = 0;
   Device kbDev;
+  static constexpr size_t MOUSE_BUTTON_CT = 5;
+  static constexpr size_t MOUSE_AXIS_CT = 3;
   Device mouseDev;
+  static constexpr size_t XIN_BUTTON_CT = 14;
+  static constexpr size_t XIN_AXIS_CT = 6;
   Device xinputDev;
+
 
   LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam);
 

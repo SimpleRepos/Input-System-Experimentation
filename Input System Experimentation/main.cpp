@@ -8,13 +8,13 @@
 std::wstring xin_to_s(const Input::Device::State& pad) {
   std::wstringstream ss;
 
-  if(pad.buttons[Input::Gamepad::DPAD_UP].held) { ss << "up"; }
+  if(pad.buttons[Input::Gamepad::DPAD_UP].held) { ss << "UP"; }
   ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_DOWN].held) { ss << "down"; }
+  if(pad.buttons[Input::Gamepad::DPAD_DOWN].held) { ss << "DOWN"; }
   ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_LEFT].held) { ss << "left"; }
+  if(pad.buttons[Input::Gamepad::DPAD_LEFT].held) { ss << "LEFT"; }
   ss << "\n";
-  if(pad.buttons[Input::Gamepad::DPAD_RIGHT].held) { ss << "right"; }
+  if(pad.buttons[Input::Gamepad::DPAD_RIGHT].held) { ss << "RIGHT"; }
   ss << "\n";
   if(pad.buttons[Input::Gamepad::START].held) { ss << "START"; }
   ss << "\n";
@@ -57,7 +57,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     gfx.clear();
     input.update();
-    font.drawText(L"up\ndown\nleft\nright\nSTART\nBACK\nLTHUMB\nRTHUMB\nLSHOULDER\nRSHOULDER\nA\nB\nX\nY", 20, 5, 5, ColorF::RED);
+    font.drawText(L"UP\nDOWN\nLEFT\nRIGHT\nSTART\nBACK\nLTHUMB\nRTHUMB\nLSHOULDER\nRSHOULDER\nA\nB\nX\nY", 20, 5, 5, ColorF::RED);
     font.drawText(xin_to_s(input.gamepad()), 20, 5, 5, ColorF::CYAN);
     gfx.present();
   }
