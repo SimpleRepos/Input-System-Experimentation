@@ -20,10 +20,21 @@ public:
     const Type type;
 
     struct Button {
-      bool held      = false; //is the button currently down
-      bool triggered = false; //is this the first frame of it being pressed
-      bool released  = false; //was it released during this frame
-      bool repeating = false; //~~# true on trigger frame, then after repeatDelayMS every repeatPeriodMS
+      //'held' is true if the button is currently pressed down
+      bool held = false;
+
+      //'triggered' is true if the button was not pressed but became pressed during this frame
+      bool triggered = false;
+
+      //'released' is true if the button was released during this frame
+      bool released  = false;
+
+      //'repeating' is true in the following cases:
+      //  * if 'trigger' is true
+      //  * one frame every 'repeatPeriodMS' AFTER the button has been held for at least 'repeatDelayMS'
+      //This is useful for things like menu navigation, where the player will want precise movement from
+      //pressing the button once, but may also want to hold the button in order to scroll quickly.
+      bool repeating = false;
     };
 
     //These values can be set by the user to effect the key-repeat behavior
@@ -64,12 +75,24 @@ public:
 
   };
 
-  enum MouseAxes { DELTA_X, DELTA_Y, DELTA_WHEEL };
+  struct Mouse {
+    enum Axes    { DELTA_X, DELTA_Y, DELTA_WHEEL };
+    enum Buttons { LEFT, RIGHT, WHEEL, BACK, FORWARD };
+  };
   const Device::State& mouse() const { return mouseDev.state(); }
 
+  //presently indexed by winapi VK codes
   const Device::State& keyboard() const { return kbDev.state(); }
 
-  enum GamepadAxes { LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LTRIGGER, RTRIGGER };
+  struct Gamepad {
+    enum Axes    { LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LTRIGGER, RTRIGGER };
+    enum Buttons { 
+      DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
+      START, BACK, LTHUMB, RTHUMB,
+      LSHOULDER, RSHOULDER, INVALID1, INVALID2, //~~@
+      A, B, X, Y
+    };
+  };
   const Device::State& gamepad() const { return xinputDev.state(); }
 
 private:

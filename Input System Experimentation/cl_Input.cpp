@@ -41,12 +41,12 @@ void Input::Device::update(uint64_t frameTime) {
       if(!btn.held && xinputPrev[i].held) { releaseButton(btn); }
     }
 
-    devState.axes[LEFT_X] = pad.sThumbLX;
-    devState.axes[LEFT_Y] = pad.sThumbLY;
-    devState.axes[RIGHT_X] = pad.sThumbRX;
-    devState.axes[RIGHT_Y] = pad.sThumbRY;
-    devState.axes[LTRIGGER] = pad.bLeftTrigger;
-    devState.axes[RTRIGGER] = pad.bRightTrigger;
+    devState.axes[Gamepad::LEFT_X] = pad.sThumbLX;
+    devState.axes[Gamepad::LEFT_Y] = pad.sThumbLY;
+    devState.axes[Gamepad::RIGHT_X] = pad.sThumbRX;
+    devState.axes[Gamepad::RIGHT_Y] = pad.sThumbRY;
+    devState.axes[Gamepad::LTRIGGER] = pad.bLeftTrigger;
+    devState.axes[Gamepad::RTRIGGER] = pad.bRightTrigger;
 
     xinputPrev = devState.buttons;
   }
@@ -109,9 +109,9 @@ void Input::Device::keyboardHandler(const RAWINPUT& rin, uint64_t frameTime) {
 
 void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
   auto& event = rin.data.mouse;
-  devState.axes[Input::MouseAxes::DELTA_X] += event.lLastX;
-  devState.axes[Input::MouseAxes::DELTA_Y] += event.lLastY;
-  devState.axes[Input::MouseAxes::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
+  devState.axes[Input::Mouse::DELTA_X] += event.lLastX;
+  devState.axes[Input::Mouse::DELTA_Y] += event.lLastY;
+  devState.axes[Input::Mouse::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
   
   for(size_t i = 0; i < devState.buttons.size(); i++) {
     USHORT buttonState = event.usButtonFlags >> (i * 2);
@@ -125,7 +125,7 @@ void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
 Input::Input(Window& win) :
   kbDev(0xFF, 0, Device::Type::KEYBOARD),
   mouseDev(5, 3, Device::Type::MOUSE),
-  xinputDev(14, 6, Device::Type::XINPUT)
+  xinputDev(16, 6, Device::Type::XINPUT)
 {
   constexpr size_t NUM_DEVICES = 2;
   RAWINPUTDEVICE devices[NUM_DEVICES] = {
