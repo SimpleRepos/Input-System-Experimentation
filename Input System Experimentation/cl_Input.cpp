@@ -3,10 +3,61 @@
 
 #pragma comment(lib, "Xinput9_1_0.lib")
 
-Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
-  repeatDelayMS = DEFAULT_REPEAT_DELAY_MS;
-  repeatPeriodMS = DEFAULT_REPEAT_PERIOD_MS;
+Input::Input(Window& win) :
+  kbDev(KB_BUTTON_CT, KB_AXIS_CT, Device::Type::KEYBOARD),
+  mouseDev(MOUSE_BUTTON_CT, MOUSE_AXIS_CT, Device::Type::MOUSE),
+  xinputDev(XIN_BUTTON_CT, XIN_AXIS_CT, Device::Type::XINPUT),
+  repeatDelayMS(DEFAULT_REPEAT_DELAY_MS),
+  repeatPeriodMS(DEFAULT_REPEAT_PERIOD_MS)
 
+{
+  constexpr size_t NUM_RIN_DEVICES = 2;
+  RAWINPUTDEVICE devices[NUM_RIN_DEVICES] = {
+    RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
+    RAWINPUTDEVICE{ 1, 6, 0, win.getHandle() }  //kb
+  };
+
+  RegisterRawInputDevices(devices, NUM_RIN_DEVICES, sizeof(RAWINPUTDEVICE));
+
+  win.addProcFunc(WM_INPUT, [this](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return procFn(hwnd, wparam, lparam); });
+}
+
+void Input::update() {
+  auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
+  uint64_t frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+  mouseDev.update(frameTime, *this);
+  kbDev.update(frameTime, *this);
+  xinputDev.update(frameTime, *this);
+}
+
+float Input::getGamepadDeadZone(int axis) {
+  return xinputDev.deadZones[axis];
+}
+
+void Input::setGamepadDeadZone(int axis, float zoneRadius) {
+  xinputDev.deadZones[axis] = zoneRadius;
+}
+
+LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
+  //delegate to default proc if window is not in foreground
+  if(GET_RAWINPUT_CODE_WPARAM(wparam) != 0) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
+
+  //store the event to be handled during the update
+  RAWINPUT rin;
+  UINT size = sizeof(RAWINPUT);
+  GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
+
+  switch(rin.header.dwType) {
+  case RIM_TYPEMOUSE: mouseDev.enqueueEvent(rin); break;
+  case RIM_TYPEKEYBOARD: kbDev.enqueueEvent(rin); break;
+  }
+
+  return 0;
+}
+
+//////////////////////////////////////////////////////////
+
+Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
   devState.buttons.resize(buttonCt);
   repeatData.resize(buttonCt);
   devState.axes.resize(axisCt);
@@ -26,7 +77,7 @@ Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
   }
 }
 
-void Input::Device::update(uint64_t frameTime) {
+void Input::Device::update(uint64_t frameTime, const Input& input) {
   for(auto& button : devState.buttons) { resetButton(button); }
   for(auto& axis : devState.axes) { axis = 0; }
 
@@ -42,7 +93,7 @@ void Input::Device::update(uint64_t frameTime) {
   }
 
   for(size_t i = 0; i < devState.buttons.size(); i++) {
-    updateRepeat(devState.buttons[i], repeatData[i], frameTime);
+    updateRepeat(devState.buttons[i], repeatData[i], frameTime, input);
   }
 }
 
@@ -77,24 +128,27 @@ void Input::Device::applyDeadZonedInput(int axis, int input, float axisMaxRange)
   if(abs(devState.axes[axis]) < deadZones[axis]) { devState.axes[axis] = 0; }
 }
 
-void Input::Device::triggerButton(Button& btn, ButtonRepeatData& aux, uint64_t frameTime) {
+void Input::Device::triggerButton(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime) {
+  //for some reason RIN observes OS key repeat messages, so we need to ensure that the trigger is not spurious
+  if(btn.held) { return; }
+
   btn.triggered = true;
   btn.held      = true;
   aux.triggerTimeMS = frameTime;
   aux.repeatPrev = 0;
 }
 
-void Input::Device::releaseButton(Button& btn) {
+void Input::Device::releaseButton(DeviceButton& btn) {
   btn.released = true;
   btn.held     = false;
 }
 
-void Input::Device::resetButton(Button& btn) {
+void Input::Device::resetButton(DeviceButton& btn) {
   btn.triggered = false;
   btn.released  = false;
 }
 
-void Input::Device::updateRepeat(Button& btn, ButtonRepeatData& aux, uint64_t frameTime) {
+void Input::Device::updateRepeat(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime, const Input& input) {
   //true on trigger frame
   btn.repeating = btn.triggered;
   if(btn.repeating) { return; }
@@ -104,11 +158,11 @@ void Input::Device::updateRepeat(Button& btn, ButtonRepeatData& aux, uint64_t fr
 
   //false prior to delay elapsed
   int elapsedMS = static_cast<int>(frameTime - aux.triggerTimeMS);
-  int postDelayMS = elapsedMS - repeatDelayMS;
+  int postDelayMS = elapsedMS - input.repeatDelayMS;
   if(postDelayMS < 0) { return; }
 
   //number of repeats that should have happened by now
-  unsigned int repeatTarget = postDelayMS / repeatPeriodMS;
+  unsigned int repeatTarget = postDelayMS / input.repeatPeriodMS;
   //if it's increased since the last poll then repeat
   btn.repeating = aux.repeatPrev < repeatTarget;
 
@@ -126,7 +180,7 @@ void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
   devState.axes[Input::Mouse::DELTA_X] += event.lLastX;
   devState.axes[Input::Mouse::DELTA_Y] += event.lLastY;
   devState.axes[Input::Mouse::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
-  
+
   for(size_t i = 0; i < devState.buttons.size(); i++) {
     USHORT buttonState = event.usButtonFlags >> (i * 2);
     if(buttonState & 0b01) { triggerButton(devState.buttons[i], repeatData[i], frameTime); }
@@ -134,53 +188,3 @@ void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
   }
 }
 
-//////////////////////////////////////////
-
-Input::Input(Window& win) :
-  kbDev(KB_BUTTON_CT, KB_AXIS_CT, Device::Type::KEYBOARD),
-  mouseDev(MOUSE_BUTTON_CT, MOUSE_AXIS_CT, Device::Type::MOUSE),
-  xinputDev(XIN_BUTTON_CT, XIN_AXIS_CT, Device::Type::XINPUT)
-{
-  constexpr size_t NUM_DEVICES = 2;
-  RAWINPUTDEVICE devices[NUM_DEVICES] = {
-    RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
-    RAWINPUTDEVICE{ 1, 6, 0, win.getHandle() }  //kb
-  };
-
-  RegisterRawInputDevices(devices, NUM_DEVICES, sizeof(RAWINPUTDEVICE));
-
-  win.addProcFunc(WM_INPUT, [this](HWND hwnd, WPARAM wparam, LPARAM lparam) -> LRESULT { return procFn(hwnd, wparam, lparam); });
-}
-
-void Input::update() {
-  auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
-  uint64_t frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-  mouseDev.update(frameTime);
-  kbDev.update(frameTime);
-  xinputDev.update(frameTime);
-}
-
-float Input::getGamepadDeadZone(int axis) {
-  return xinputDev.deadZones[axis];
-}
-
-void Input::setGamepadDeadZone(int axis, float zoneRadius) {
-  xinputDev.deadZones[axis] = zoneRadius;
-}
-
-LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
-  //delegate to default proc if window is not in foreground
-  if(GET_RAWINPUT_CODE_WPARAM(wparam) != 0) { return DefWindowProc(hwnd, WM_INPUT, wparam, lparam); }
-
-  //store the event to be handled during the update
-  RAWINPUT rin;
-  UINT size = sizeof(RAWINPUT);
-  GetRawInputData(reinterpret_cast<HRAWINPUT>(lparam), RID_INPUT, &rin, &size, sizeof(RAWINPUTHEADER));
-
-  switch(rin.header.dwType) {
-  case RIM_TYPEMOUSE: mouseDev.eventQueue.push(rin); break;
-  case RIM_TYPEKEYBOARD: kbDev.eventQueue.push(rin); break;
-  }
-
-  return 0;
-}

@@ -5,7 +5,7 @@
 #include <sstream>
 #include <string>
 
-std::wstring to_s(const Input::Device::State& state) {
+std::wstring to_s(const Input::DeviceState& state) {
   std::wstringstream ss;
 
   constexpr int columns = 16;
@@ -13,9 +13,12 @@ std::wstring to_s(const Input::Device::State& state) {
   for(size_t x = 0; x < state.buttons.size(); ) {
     for(int i = 0; i < columns; i++) {
       if(++x >= state.buttons.size()) { break; }
-      if(state.buttons[x].held) { ss <<  "O"; }
-      else                      { ss <<  "."; }
-      ss <<  " ";
+      ss <<  "[";
+      ss << (state.buttons[x].triggered ? "O" : ".");
+      ss << (state.buttons[x].held      ? "O" : ".");
+      ss << (state.buttons[x].released  ? "O" : ".");
+      ss << (state.buttons[x].repeating ? "O" : ".");
+      ss <<  "] ";
     }
     ss << "\n";
   }
@@ -31,7 +34,7 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
   Input input(win);
 
   while(win.update()) {
-    Sleep(25);
+    Sleep(50);
 
     gfx.clear();
     input.update();
