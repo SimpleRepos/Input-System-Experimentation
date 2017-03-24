@@ -3,14 +3,7 @@
 
 #pragma comment(lib, "Xinput9_1_0.lib")
 
-Input::Input(Window& win) :
-  kbDev(KB_BUTTON_CT, KB_AXIS_CT, Device::Type::KEYBOARD),
-  mouseDev(MOUSE_BUTTON_CT, MOUSE_AXIS_CT, Device::Type::MOUSE),
-  xinputDev(XIN_BUTTON_CT, XIN_AXIS_CT, Device::Type::XINPUT),
-  repeatDelayMS(DEFAULT_REPEAT_DELAY_MS),
-  repeatPeriodMS(DEFAULT_REPEAT_PERIOD_MS)
-
-{
+Input::Input(Window& win) : repeatDelayMS(DEFAULT_REPEAT_DELAY_MS), repeatPeriodMS(DEFAULT_REPEAT_PERIOD_MS) {
   constexpr size_t NUM_RIN_DEVICES = 2;
   RAWINPUTDEVICE devices[NUM_RIN_DEVICES] = {
     RAWINPUTDEVICE{ 1, 2, 0, win.getHandle() }, //mouse
@@ -57,78 +50,30 @@ LRESULT Input::procFn(HWND hwnd, WPARAM wparam, LPARAM lparam) {
 
 //////////////////////////////////////////////////////////
 
-Input::Device::Device(size_t buttonCt, size_t axisCt, Type type) : type(type) {
+Input::Device::Device(size_t buttonCt, size_t axisCt) {
   devState.buttons.resize(buttonCt);
   repeatData.resize(buttonCt);
   devState.axes.resize(axisCt);
-  deadZones.resize(axisCt, 0.1f);
-
-  switch(type) {
-  case Type::MOUSE:
-    processEvent = [this](const RAWINPUT& rin, uint64_t frameTime) { mouseHandler(rin, frameTime); };
-    break;
-  case Type::KEYBOARD:
-    processEvent = [this](const RAWINPUT& rin, uint64_t frameTime) { keyboardHandler(rin, frameTime); };
-    break;
-  case Type::XINPUT:
-    processEvent = [](const RAWINPUT&, uint64_t) {};
-    xinputPrev = devState.buttons;
-    break;
-  }
 }
 
 void Input::Device::update(uint64_t frameTime, const Input& input) {
   for(auto& button : devState.buttons) { resetButton(button); }
   for(auto& axis : devState.axes) { axis = 0; }
 
-  if(type == Type::XINPUT) {
-    updateXinput(frameTime);
-  }
-  else {
-    while(!eventQueue.empty()) {
-      auto event = eventQueue.front();
-      eventQueue.pop();
-      processEvent(event, frameTime);
-    }
-  }
+  updateHandler(devState, eventQueue, frameTime);
 
-  for(size_t i = 0; i < devState.buttons.size(); i++) {
-    updateRepeat(devState.buttons[i], repeatData[i], frameTime, input);
-  }
+  for(size_t i = 0; i < devState.buttons.size(); i++) { updateRepeat(i, frameTime, input); }
 }
 
-void Input::Device::updateXinput(uint64_t frameTime) {
-  XINPUT_STATE xstate;
-  XInputGetState(0, &xstate);
-  auto& pad = xstate.Gamepad;
-
-  for(size_t i = 0; i < devState.buttons.size(); i++) {
-    size_t effectiveIndex = (i < Gamepad::Buttons::A) ? i : i + 2;
-    auto& btn = devState.buttons[i];
-    btn.held = (pad.wButtons >> effectiveIndex) & 1;
-    if(btn.held && !xinputPrev[i].held) { triggerButton(btn, repeatData[i], frameTime); }
-    if(!btn.held && xinputPrev[i].held) { releaseButton(btn); }
-  }
-
-  constexpr float STICK_RANGE = 32768.0f;
-  constexpr float TRIGGER_RANGE = 255.0f;
-
-  applyDeadZonedInput(Gamepad::Axes::LEFT_X,  pad.sThumbLX, STICK_RANGE);
-  applyDeadZonedInput(Gamepad::Axes::LEFT_Y,  pad.sThumbLY, STICK_RANGE);
-  applyDeadZonedInput(Gamepad::Axes::RIGHT_X, pad.sThumbRX, STICK_RANGE);
-  applyDeadZonedInput(Gamepad::Axes::RIGHT_Y, pad.sThumbRY, STICK_RANGE);
-  applyDeadZonedInput(Gamepad::Axes::LTRIGGER, pad.bLeftTrigger,  TRIGGER_RANGE);
-  applyDeadZonedInput(Gamepad::Axes::RTRIGGER, pad.bRightTrigger, TRIGGER_RANGE);
-
-  xinputPrev = devState.buttons;
-}
-
-void Input::Device::applyDeadZonedInput(int axis, int input, float axisMaxRange) {
+void Input::GamepadDevice::applyDeadZonedInput(DeviceState& devState, int axis, int input, int axisMaxRange) {
   devState.axes[axis] = static_cast<float>(input) / axisMaxRange;
   if(abs(devState.axes[axis]) < deadZones[axis]) { devState.axes[axis] = 0; }
 }
 
-void Input::Device::triggerButton(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime) {
+void Input::Device::triggerButton(size_t index, uint64_t frameTime) {
+  auto& btn = devState.buttons[index];
+  auto& aux = repeatData[index];
+
   //for some reason RIN observes OS key repeat messages, so we need to ensure that the trigger is not spurious
   if(btn.held) { return; }
 
@@ -138,7 +83,8 @@ void Input::Device::triggerButton(DeviceButton& btn, ButtonRepeatData& aux, uint
   aux.repeatPrev = 0;
 }
 
-void Input::Device::releaseButton(DeviceButton& btn) {
+void Input::Device::releaseButton(size_t index) {
+  auto& btn = devState.buttons[index];
   btn.released = true;
   btn.held     = false;
 }
@@ -148,7 +94,10 @@ void Input::Device::resetButton(DeviceButton& btn) {
   btn.released  = false;
 }
 
-void Input::Device::updateRepeat(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime, const Input& input) {
+void Input::Device::updateRepeat(size_t index, uint64_t frameTime, const Input& input) {
+  DeviceButton& btn = devState.buttons[index];
+  ButtonRepeatData& aux = repeatData[index];
+
   //true on trigger frame
   btn.repeating = btn.triggered;
   if(btn.repeating) { return; }
@@ -169,22 +118,84 @@ void Input::Device::updateRepeat(DeviceButton& btn, ButtonRepeatData& aux, uint6
   aux.repeatPrev = repeatTarget;
 }
 
-void Input::Device::keyboardHandler(const RAWINPUT& rin, uint64_t frameTime) {
-  auto& event = rin.data.keyboard;
-  if(event.Message == WM_KEYDOWN) { triggerButton(devState.buttons[event.VKey], repeatData[event.VKey], frameTime); }
-  if(event.Message == WM_KEYUP)   { releaseButton(devState.buttons[event.VKey]); }
+//////////////////////////////////////////////////////////
+
+Input::KeyboardDevice::KeyboardDevice() : Device(BUTTON_CT, AXIS_CT) {
+  // nop
 }
 
-void Input::Device::mouseHandler(const RAWINPUT& rin, uint64_t frameTime) {
-  auto& event = rin.data.mouse;
-  devState.axes[Input::Mouse::DELTA_X] += event.lLastX;
-  devState.axes[Input::Mouse::DELTA_Y] += event.lLastY;
-  devState.axes[Input::Mouse::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
+Input::MouseDevice::MouseDevice() : Device(BUTTON_CT, AXIS_CT) {
+  // nop
+}
 
-  for(size_t i = 0; i < devState.buttons.size(); i++) {
-    USHORT buttonState = event.usButtonFlags >> (i * 2);
-    if(buttonState & 0b01) { triggerButton(devState.buttons[i], repeatData[i], frameTime); }
-    if(buttonState & 0b10) { releaseButton(devState.buttons[i]); }
+Input::GamepadDevice::GamepadDevice() : Device(BUTTON_CT, AXIS_CT) {
+  buttonPrev.resize(BUTTON_CT);
+  deadZones.resize(AXIS_CT, 0.1f);
+}
+
+void Input::KeyboardDevice::updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) {
+  while(!eventQueue.empty()) {
+    auto event = eventQueue.front().data.keyboard;
+
+    if(event.Message == WM_KEYDOWN) { triggerButton(event.VKey, frameTime); }
+    if(event.Message == WM_KEYUP)   { releaseButton(event.VKey); }
+
+    eventQueue.pop();
   }
 }
 
+void Input::MouseDevice::updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) {
+  while(!eventQueue.empty()) {
+    auto event = eventQueue.front().data.mouse;
+
+    devState.axes[Input::Mouse::DELTA_X] += event.lLastX;
+    devState.axes[Input::Mouse::DELTA_Y] += event.lLastY;
+    devState.axes[Input::Mouse::DELTA_WHEEL] += static_cast<short>(event.usButtonData);
+
+    for(size_t i = 0; i < devState.buttons.size(); i++) {
+      USHORT buttonState = event.usButtonFlags >> (i * 2);
+      if(buttonState & 0b01) { triggerButton(i, frameTime); }
+      if(buttonState & 0b10) { releaseButton(i); }
+    }
+
+    eventQueue.pop();
+  }
+}
+
+void Input::GamepadDevice::updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) {
+  if(!eventQueue.empty()) {
+    throw std::runtime_error("XInput device recieved a Raw Input event message. Something is very wrong!");
+  }
+
+  XINPUT_STATE xstate;
+  XInputGetState(0, &xstate);
+  auto& pad = xstate.Gamepad;
+
+  constexpr int xinBtnMap[] = {
+    XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT, XINPUT_GAMEPAD_DPAD_RIGHT,
+    XINPUT_GAMEPAD_START, XINPUT_GAMEPAD_BACK,
+    XINPUT_GAMEPAD_LEFT_THUMB, XINPUT_GAMEPAD_RIGHT_THUMB,
+    XINPUT_GAMEPAD_LEFT_SHOULDER, XINPUT_GAMEPAD_RIGHT_SHOULDER,
+    XINPUT_GAMEPAD_A, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y
+  };
+
+  for(size_t i = 0; i < devState.buttons.size(); i++) {
+    auto& btn = devState.buttons[i];
+
+    btn.held = pad.wButtons & xinBtnMap[i];
+
+    if( btn.held && !buttonPrev[i].held) { triggerButton(i, frameTime); }
+    if(!btn.held &&  buttonPrev[i].held) { releaseButton(i); }
+  }
+  
+  constexpr int XINPUT_STICK_RANGE = 32768;
+  constexpr int XINPUT_TRIGGER_RANGE = 255;
+  applyDeadZonedInput(devState, Gamepad::Axes::LEFT_X,   pad.sThumbLX, XINPUT_STICK_RANGE);
+  applyDeadZonedInput(devState, Gamepad::Axes::LEFT_Y,   pad.sThumbLY, XINPUT_STICK_RANGE);
+  applyDeadZonedInput(devState, Gamepad::Axes::RIGHT_X,  pad.sThumbRX, XINPUT_STICK_RANGE);
+  applyDeadZonedInput(devState, Gamepad::Axes::RIGHT_Y,  pad.sThumbRY, XINPUT_STICK_RANGE);
+  applyDeadZonedInput(devState, Gamepad::Axes::LTRIGGER, pad.bLeftTrigger,  XINPUT_TRIGGER_RANGE);
+  applyDeadZonedInput(devState, Gamepad::Axes::RTRIGGER, pad.bRightTrigger, XINPUT_TRIGGER_RANGE);
+
+  buttonPrev = devState.buttons;
+}

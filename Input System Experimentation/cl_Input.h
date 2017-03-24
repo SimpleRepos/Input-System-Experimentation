@@ -61,25 +61,31 @@ public:
   const DeviceState& gamepad() const { return xinputDev.state(); }
 
   //the user may change these values to customize the DeviceButton repeat behavior
-  unsigned int repeatDelayMS;
-  unsigned int repeatPeriodMS;
-  static const unsigned int DEFAULT_REPEAT_DELAY_MS  = 500;
-  static const unsigned int DEFAULT_REPEAT_PERIOD_MS = 100;
+  unsigned int getRepeatDelayMS() const { return repeatDelayMS; }
+  void getRepeatDelayMS(unsigned int milliseconds) { repeatDelayMS = milliseconds; }
+
+  unsigned int getRepeatPeriodMS() const { return repeatPeriodMS; }
+  void getRepeatPeriodMS(unsigned int milliseconds) { repeatPeriodMS = milliseconds; }
 
 private:
+  static const unsigned int DEFAULT_REPEAT_DELAY_MS  = 500;
+  static const unsigned int DEFAULT_REPEAT_PERIOD_MS = 100;
+  unsigned int repeatDelayMS;
+  unsigned int repeatPeriodMS;
+
+
   class Device {
   public:
-    enum class Type { MOUSE, KEYBOARD, XINPUT };
-    const Type type;
-
-    Device(size_t buttonCt, size_t axisCt, Type type);
+    Device(size_t buttonCt, size_t axisCt);
 
     void update(uint64_t frameTime, const Input& input);
     const DeviceState& state() const { return devState; }
 
-    std::vector<float> deadZones;
-
     void enqueueEvent(const RAWINPUT& event) { eventQueue.push(event); }
+
+  protected:
+    void triggerButton(size_t index, uint64_t frameTime);
+    void releaseButton(size_t index);
 
   private:
     struct ButtonRepeatData {
@@ -89,33 +95,55 @@ private:
 
     DeviceState devState;
     std::vector<ButtonRepeatData> repeatData;
-    std::vector<DeviceButton> xinputPrev;
     std::queue<RAWINPUT> eventQueue;
 
-    void updateXinput(uint64_t frameTime);
-    void applyDeadZonedInput(int axis, int input, float axisMaxRange);
-    std::function<void(const RAWINPUT&, uint64_t)> processEvent;
-
-    void triggerButton(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime);
-    void releaseButton(DeviceButton& btn);
     void resetButton(DeviceButton& btn);
-    void updateRepeat(DeviceButton& btn, ButtonRepeatData& aux, uint64_t frameTime, const Input& input);
+    void updateRepeat(size_t index, uint64_t frameTime, const Input& input);
 
-    void keyboardHandler(const RAWINPUT& rin, uint64_t frameTime);
-    void mouseHandler(const RAWINPUT& rin, uint64_t frameTime);
+    virtual void updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) = 0;
 
   };
 
-  static constexpr size_t KB_BUTTON_CT = 255;
-  static constexpr size_t KB_AXIS_CT = 0;
-  Device kbDev;
-  static constexpr size_t MOUSE_BUTTON_CT = 5;
-  static constexpr size_t MOUSE_AXIS_CT = 3;
-  Device mouseDev;
-  static constexpr size_t XIN_BUTTON_CT = 14;
-  static constexpr size_t XIN_AXIS_CT = 6;
-  Device xinputDev;
+  class KeyboardDevice : public Device {
+  public:
+    static constexpr size_t BUTTON_CT = 255;
+    static constexpr size_t AXIS_CT = 0;
+    KeyboardDevice();
 
+  private:
+    void updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) override;
+
+  };
+
+  class MouseDevice : public Device {
+  public:
+    static constexpr size_t BUTTON_CT = 5;
+    static constexpr size_t AXIS_CT = 3;
+    MouseDevice();
+
+  private:
+    void updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) override;
+
+  };
+
+  class GamepadDevice : public Device {
+  public:
+    static constexpr size_t BUTTON_CT = 14;
+    static constexpr size_t AXIS_CT = 6;
+    GamepadDevice();
+
+    std::vector<float> deadZones;
+
+  private:
+    void updateHandler(DeviceState& devState, std::queue<RAWINPUT>& eventQueue, uint64_t frameTime) override;
+    void applyDeadZonedInput(DeviceState& devState, int axis, int input, int axisMaxRange);
+    std::vector<DeviceButton> buttonPrev;
+
+  };
+
+  KeyboardDevice kbDev;
+  MouseDevice mouseDev;
+  GamepadDevice xinputDev;
 
   LRESULT procFn(HWND hwnd, WPARAM wparam, LPARAM lparam);
 

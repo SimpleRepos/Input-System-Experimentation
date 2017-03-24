@@ -5,7 +5,16 @@
 #include <sstream>
 #include <string>
 
-std::wstring to_s(const Input::DeviceState& state) {
+void appendButton(std::wstringstream& stream, const Input::DeviceButton& button) {
+  stream <<  "[";
+  stream << (button.triggered ? "O" : ".");
+  stream << (button.held      ? "O" : ".");
+  stream << (button.released  ? "O" : ".");
+  stream << (button.repeating ? "O" : ".");
+  stream <<  "] ";
+}
+
+std::wstring k_to_s(const Input::DeviceState& state) {
   std::wstringstream ss;
 
   constexpr int columns = 16;
@@ -13,15 +22,32 @@ std::wstring to_s(const Input::DeviceState& state) {
   for(size_t x = 0; x < state.buttons.size(); ) {
     for(int i = 0; i < columns; i++) {
       if(++x >= state.buttons.size()) { break; }
-      ss <<  "[";
-      ss << (state.buttons[x].triggered ? "O" : ".");
-      ss << (state.buttons[x].held      ? "O" : ".");
-      ss << (state.buttons[x].released  ? "O" : ".");
-      ss << (state.buttons[x].repeating ? "O" : ".");
-      ss <<  "] ";
+      appendButton(ss, state.buttons[x]);
     }
     ss << "\n";
   }
+
+  return ss.str();
+}
+
+std::wstring m_to_s(const Input::DeviceState& state) {
+  std::wstringstream ss;
+
+  ss << "Delta Pos: " << state.axes[Input::Mouse::Axes::DELTA_X] << ", " << state.axes[Input::Mouse::Axes::DELTA_Y] << ", " << state.axes[Input::Mouse::Axes::DELTA_WHEEL] << "\n";
+  ss << "Buttons: ";
+  for(auto& button : state.buttons) { appendButton(ss, button); }
+
+  return ss.str();
+}
+
+std::wstring g_to_s(const Input::DeviceState& state) {
+  std::wstringstream ss;
+
+  ss << "Axes: ";
+  for(float axis : state.axes) { ss << axis << "\n"; }
+
+  ss << "Buttons: ";
+  for(auto& button : state.buttons) { appendButton(ss, button); }
 
   return ss.str();
 }
@@ -38,7 +64,9 @@ int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
     gfx.clear();
     input.update();
-    font.drawText(to_s(input.keyboard()), 10, 5, 5, ColorF::CYAN);
+    font.drawText(k_to_s(input.keyboard()), 10, 5, 5, ColorF::CYAN);
+    font.drawText(m_to_s(input.mouse()), 10, 5, 200, ColorF::MAGENTA);
+    font.drawText(g_to_s(input.gamepad()), 10, 5, 235, ColorF::YELLOW);
     gfx.present();
   }
 
